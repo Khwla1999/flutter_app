@@ -1,16 +1,22 @@
-import 'package:sqflite/sqflite.dart';
+import 'dart:async';
 import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
-  factory DatabaseHelper() => _instance;
+  static Database? _database;
+
+  factory DatabaseHelper() {
+    return _instance;
+  }
 
   DatabaseHelper._internal();
 
-  static Database? _database;
-
   Future<Database> get database async {
-    if (_database != null) return _database!;
+    if (_database != null) {
+      return _database!;
+    }
+
     _database = await _initDatabase();
     return _database!;
   }
@@ -20,39 +26,31 @@ class DatabaseHelper {
     return await openDatabase(
       path,
       version: 1,
-      onCreate: _onCreate,
+      onCreate: (db, version) {
+        return db.execute(
+          'CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT, password TEXT)',
+        );
+      },
     );
   }
 
-  Future _onCreate(Database db, int version) async {
-    await db.execute('''
-      CREATE TABLE users(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT NOT NULL,
-        email TEXT NOT NULL,
-        password TEXT NOT NULL
-      )
-    ''');
+  Future<void> insertUser(String username, String password) async {
+    final db = await database;
+    await db.insert(
+      'users',
+      {'username': username, 'password': password},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
-  Future<int> registerUser(
-      String username, String email, String password) async {
-    Database db = await database;
-    return await db.insert(
-        'users', {'username': username, 'email': email, 'password': password});
-  }
-
-  Future<Map<String, dynamic>?> loginUser(
+  Future<Map<String, dynamic>?> getUser(
       String username, String password) async {
-    Database db = await database;
-    List<Map<String, dynamic>> results = await db.query(
+    final db = await database;
+    final users = await db.query(
       'users',
       where: 'username = ? AND password = ?',
       whereArgs: [username, password],
     );
-    if (results.isNotEmpty) {
-      return results.first;
-    }
-    return null;
+    return users.isNotEmpty ? users.first : null;
   }
 }
